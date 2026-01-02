@@ -1,4 +1,3 @@
-
 import express from "express";
 import { execFile } from "child_process";
 import fs from "fs";
@@ -13,7 +12,6 @@ const app = express();
  */
 function getCookieFile() {
   const cookieText = (process.env.IG_COOKIES || "").trim();
-
   if (!cookieText) return null;
 
   const cookiePath = path.join(os.tmpdir(), "ig_cookies.txt");
@@ -22,7 +20,14 @@ function getCookieFile() {
 }
 
 /**
- * HEALTH CHECK
+ * HEALTHCHECK (Railway uses this to know app is alive)
+ */
+app.get("/health", (req, res) => {
+  res.status(200).send("ok");
+});
+
+/**
+ * HOME (optional)
  */
 app.get("/", (req, res) => {
   res.json({
@@ -34,6 +39,7 @@ app.get("/", (req, res) => {
 /**
  * MAIN INSTAGRAM ENDPOINT
  * /ig?url=https://www.instagram.com/reel/XXXX/
+ * Works for: reels, posts, stories (cookies needed for stories)
  */
 app.get("/ig", (req, res) => {
   const url = (req.query.url || "").toString().trim();
@@ -88,6 +94,7 @@ app.get("/ig", (req, res) => {
 
 /**
  * PORT — MUST BE LAST
+ * Railway injects PORT (often 8080)
  */
 const PORT = process.env.PORT || 3000;
 
