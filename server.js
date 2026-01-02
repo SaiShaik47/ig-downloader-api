@@ -1,3 +1,4 @@
+
 import express from "express";
 import { execFile } from "child_process";
 import fs from "fs";
@@ -5,31 +6,46 @@ import os from "os";
 import path from "path";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 /**
- * Writes IG_COOKIES (Netscape cookies.txt content) to a temp file.
- * Railway cannot use "--cookies-from-browser", so we use "--cookies <file>".
+ * WRITE COOKIES FROM RAILWAY VARIABLE TO TEMP FILE
+ * IG_COOKIES = full cookies.txt content
  */
-function getCookieFilePath() {
+function getCookieFile() {
   const cookieText = (process.env.IG_COOKIES || "").trim();
+
   if (!cookieText) return null;
 
-  const filePath = path.join(os.tmpdir(), "ig_cookies.txt");
-  fs.writeFileSync(filePath, cookieText, "utf8");
-  return filePath;
+  const cookiePath = path.join(os.tmpdir(), "ig_cookies.txt");
+  fs.writeFileSync(cookiePath, cookieText, "utf8");
+  return cookiePath;
 }
 
-app.get("/", (_, res) => {
-  res.json({ ok: true, message: "IG Downloader API running" });
+/**
+ * HEALTH CHECK
+ */
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Instagram Downloader API running"
+  });
 });
 
-// GET /ig?url=<instagram_link>
+/**
+ * MAIN INSTAGRAM ENDPOINT
+ * /ig?url=https://www.instagram.com/reel/XXXX/
+ */
 app.get("/ig", (req, res) => {
   const url = (req.query.url || "").toString().trim();
-  if (!url) return res.status(400).json({ ok: false, error: "Missing url" });
 
-  const cookieFile = getCookieFilePath();
+  if (!url) {
+    return res.status(400).json({
+      ok: false,
+      reason: "Missing Instagram URL"
+    });
+  }
+
+  const cookieFile = getCookieFile();
 
   const args = [
     "--no-warnings",
@@ -42,26 +58,39 @@ app.get("/ig", (req, res) => {
 
   execFile("yt-dlp", args, { timeout: 30000 }, (err, stdout, stderr) => {
     if (err) {
-      const reason = (stderr || err.message || "").toString().slice(0, 400);
-      return res.status(200).json({ ok: false, reason });
+      return res.json({
+        ok: false,
+        reason: (stderr || err.message || "yt-dlp error")
+          .toString()
+          .slice(0, 400)
+      });
     }
 
     const urls = (stdout || "")
       .split("\n")
-      .map(s => s.trim())
+      .map(u => u.trim())
       .filter(Boolean);
 
     if (!urls.length) {
-      return res.status(200).json({
+      return res.json({
         ok: false,
-        reason: "No media URLs found (might be private, removed, or cookies expired)"
+        reason: "No media found (private / deleted / cookies expired)"
       });
     }
 
-    res.json({ ok: true, urls });
+    return res.json({
+      ok: true,
+      count: urls.length,
+      urls
+    });
   });
 });
 
+/**
+ * PORT — MUST BE LAST
+ */
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("API running on port", PORT);
+  console.log("✅ API running on port", PORT);
 });
